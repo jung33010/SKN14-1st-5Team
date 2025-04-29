@@ -32,7 +32,7 @@ def get_region2_options(region1):
     return region2_list['region2'].tolist()
 
 # 사고 데이터 불러오기 함수 (2012년 5월 한정)
-def get_seoul_accident_data(region1, region2, start_date, end_date):
+def get_accident_data(region1, region2, start_date, end_date):
     conn = get_db_connection()
     query = f"""
     SELECT a.id, a.datetime, a.daynight, a.weekday, a.dead, a.hurt, a.region1, a.region2,
@@ -48,52 +48,80 @@ def get_seoul_accident_data(region1, region2, start_date, end_date):
     return df
 
 # Streamlit 제목
-st.title('🚗 교통사고 다발지역 지도 (folium 버전)')
+st.title('🚗 교통사고 다발지역 지도 ')
 st.caption("2012년 5월에 발생한 사고를 기반으로 사고 규모가 시각화됩니다. 안전운전하세요!")
 
-# 지역1 선택
+# 지역1 (출발지) 선택
 region1_options = ['서울', '부산', '대구', '인천']  # 예시로 서울, 부산, 대구, 인천 선택지 추가
-region1 = st.selectbox('지역을 선택하세요', region1_options)
+region1 = st.selectbox('출발지를 선택하세요', region1_options)
 
-# 지역2 선택 (region1에 따라 동적으로 변경)
+# 지역2 (경유지) 선택 (region1에 따라 동적으로 변경)
 if region1:
     region2_options = get_region2_options(region1)
-    region2 = st.selectbox('세부 지역을 선택하세요', region2_options)
+    region2 = st.selectbox('경유지를 선택하세요', region2_options)
 
-    # 고정된 날짜 범위 (2012년 5월)
-    start_date = '2012-05-01'
-    end_date = '2012-05-31'
+# 지역3 (목적지) 선택 (region1에 따라 동적으로 변경)
+if region1:
+    region3_options = get_region2_options(region1)
+    region3 = st.selectbox('목적지를 선택하세요', region3_options)
 
-    # 데이터 로드 (스피너 추가)
-    with st.spinner("🚦 사고 데이터를 불러오는 중입니다..."):
-        df = get_seoul_accident_data(region1, region2, start_date, end_date)
-    st.success("✅ 데이터 불러오기 완료!")
+# 고정된 날짜 범위 (2012년 5월)
+start_date = '2012-05-01'
+end_date = '2012-05-31'
 
-    # folium 지도 생성
-    my_map = folium.Map(location=[37.5665, 126.9780], zoom_start=11)
+# 데이터 로드 (스피너 추가)
+with st.spinner("🚦 사고 데이터를 불러오는 중입니다..."):
+    df1 = get_accident_data(region1, region2, start_date, end_date)
+    df2 = get_accident_data(region1, region3, start_date, end_date)
+st.success("✅ 데이터 불러오기 완료!")
 
-    # 사고 데이터 지도에 추가
-    for _, row in df.iterrows():
-        size = 5 + row['dead'] * 5 + row['hurt']  # 반지름 설정
+# folium 지도 생성
+my_map = folium.Map(location=[37.5665, 126.9780], zoom_start=11)
 
-        # 원형 마커
-        folium.CircleMarker(
-            location=[row['lat'], row['lon']],
-            radius=size,
-            color='crimson',
-            fill=True,
-            fill_opacity=0.8
-        ).add_to(my_map)
+# 사고 데이터 지도에 추가 (출발지와 경유지, 목적지)
+for _, row in df1.iterrows():
+    size = 5 + row['dead'] * 5 + row['hurt']  # 반지름 설정
 
-        # 숫자만 (사망자 수, 부상자 수) 표시하는 텍스트 마커
-        folium.Marker(
-            location=[row['lat'], row['lon']],
-            icon=folium.DivIcon(
-                html=f"""<div style='font-size:10pt; color:black'>
-                        ({row['dead']},{row['hurt']})
-                        </div>"""
-            )
-        ).add_to(my_map)
+    # 원형 마커 (출발지)
+    folium.CircleMarker(
+        location=[row['lat'], row['lon']],
+        radius=size,
+        color='crimson',
+        fill=True,
+        fill_opacity=0.8
+    ).add_to(my_map)
 
-    # Streamlit에 지도 표시
-    st.components.v1.html(my_map._repr_html_(), height=600)
+    # 숫자만 (사망자 수, 부상자 수) 표시하는 텍스트 마커 (출발지)
+    folium.Marker(
+        location=[row['lat'], row['lon']],
+        icon=folium.DivIcon(
+            html=f"""<div style='font-size:10pt; color:black'>
+                    ({row['dead']},{row['hurt']})
+                    </div>"""
+        )
+    ).add_to(my_map)
+
+for _, row in df2.iterrows():
+    size = 5 + row['dead'] * 5 + row['hurt']  # 반지름 설정
+
+    # 원형 마커 (경유지 및 목적지)
+    folium.CircleMarker(
+        location=[row['lat'], row['lon']],
+        radius=size,
+        color='blue',
+        fill=True,
+        fill_opacity=0.8
+    ).add_to(my_map)
+
+    # 숫자만 (사망자 수, 부상자 수) 표시하는 텍스트 마커 (경유지 및 목적지)
+    folium.Marker(
+        location=[row['lat'], row['lon']],
+        icon=folium.DivIcon(
+            html=f"""<div style='font-size:10pt; color:black'>
+                    ({row['dead']},{row['hurt']})
+                    </div>"""
+        )
+    ).add_to(my_map)
+
+# Streamlit에 지도 표시
+st.components.v1.html(my_map._repr_html_(), height=600)
